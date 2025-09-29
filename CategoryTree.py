@@ -5,11 +5,12 @@ class TreeNode:
         self.index = index  # Leaf index for items; internal nodes get assigned later
         self.members = {}
         self.parent= None
+        self.is_item = False
         
-    def add_member(self, idx):
+    def add_member(self, idx, is_item=False):
         self.members[idx] = TreeNode(idx)
         self.members[idx].parent =self
-
+        self.members[idx].is_item = is_item
 
 
 def build_tree(level=0, tree=None, df=None, _debug_=False):
@@ -38,8 +39,8 @@ def build_tree(level=0, tree=None, df=None, _debug_=False):
 def add_to_node(tnodes, target, new):
     if tnodes is None:
         return
-    if tnodes.index == target:
-        tnodes.add_member(new)
+    if (tnodes.index == target) and (tnodes.is_item == False):
+        tnodes.add_member(new, True) # set is_item to True
         return
     for n in tnodes.members.keys():    
         add_to_node(tnodes.members[n], target, new)
@@ -49,12 +50,12 @@ def get_path(tr, idx, path):
     if tr is None:
         return 
 
-    if tr.index == idx:
+    if (tr.index == idx) and (tr.is_item == True):
         path.append(tr.index)
 
         while True:
             if tr.parent is None:
-                break
+                break             
             path.append(tr.parent.index)
             tr = tr.parent
         return 
