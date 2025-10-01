@@ -1,3 +1,4 @@
+from ItemMap import ItemMap
 
 class TreeNode:
     def __init__(self, index=None):
@@ -44,6 +45,15 @@ def add_to_node(tnodes, target, new):
         return
     for n in tnodes.members.keys():    
         add_to_node(tnodes.members[n], target, new)
+
+
+def build_category_tree(rootcode_, df_, itemmap_ : ItemMap):
+    tree_cat = TreeNode(rootcode_) 
+    build_tree(0,{rootcode_:tree_cat}, df_) 
+    for catid, itemid in itemmap_.items():
+        for itemidx in itemid.keys():
+            add_to_node(tree_cat,catid,itemidx) 
+    return tree_cat
 
 
 def get_path(tr, idx, path):

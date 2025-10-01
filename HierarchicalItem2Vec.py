@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from parameters import Params
 from ItemMap import ItemMap
-from BatchToolItem import BatchToolItem
+from batch_tool import BatchToolItem
 from HuffmanTree import generate_codebook
 from CategoryTree import get_path
 
