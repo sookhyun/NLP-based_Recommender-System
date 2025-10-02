@@ -21,19 +21,21 @@ class HierarchicalItem2Vec(nn.Module):
     def __init__(self, map : ItemMap, params: Params, huff_tree, cat_tree):
         super().__init__()
 
-
+        self.debug = False
         self.map = map
         self.params = params
         self.huff_tree = huff_tree
         self.cat_tree = cat_tree           
-        self.paths = generate_codebook(self.huff_tree)  # {item_id: (codes, nodes)}    
+        self.paths = generate_codebook(self.huff_tree)  # {item_id: (codes, nodes)}   
 
         # context items        
         self.item_embeddings = nn.Embedding(
             self.map.dim_items, 
             params.dim_embedding
         )
+        nn.init.uniform_(self.item_embeddings.weight, -0.5, 0.5)
 
+        
         # target items
         self.category_embeddings = nn.Embedding(
             self.map.dim_categories, 
@@ -65,6 +67,7 @@ class HierarchicalItem2Vec(nn.Module):
         item_emb = item_emb.unsqueeze(0).expand_as(cat_embs)
         cosine_sim = F.cosine_similarity(item_emb, cat_embs, dim=1)
         loss = 1 - cosine_sim  # cosine loss
+
         return loss.mean()    
 
 
@@ -85,14 +88,13 @@ class HierarchicalItem2Vec(nn.Module):
         for i in range(B):
             context_id = context_ids[i].item()
             center_emb = center_embs[i]  # (D,)
-            
+         
             codes, nodes = self.paths[self.map.get_item(context_id)]  # codes: list[int], nodes: list[node]
             
             for code, node in zip(codes, nodes):
                 weight = self.node_weights[self.node_map[id(node)]]  # (D,)
                 logit = torch.dot(center_emb, weight)
-                
-                label = torch.tensor(code, dtype=torch.float32, device=logit.device)
+                label = torch.tensor(code, dtype=torch.float32, device=logit.device,requires_grad=False)
                 # Use BCE with logits for stability
                 loss = F.binary_cross_entropy_with_logits(logit.unsqueeze(0), label.unsqueeze(0))
                 total_loss += loss
@@ -103,8 +105,8 @@ class HierarchicalItem2Vec(nn.Module):
     
     def forward(self, center_ids, context_ids):
         """
-        input:: center_ids: LongTensor (B,)
-        output:: context_ids: LongTensor (B,)
+        center_ids: LongTensor (B,)
+        context_ids: LongTensor (B,)
         
         """
         # Input embedding
@@ -138,9 +140,9 @@ class HierarchicalItem2Vec(nn.Module):
 
 
     def get_normalized_embeddings(self):
-        
-        raw_embeddings = self.item_embeddings.weight.data  # shape: [num_items, dim_embedding]
-        norm_embeddings = F.normalize(raw_embeddings, p=2, dim=1)  # unit vectors        
+        with torch.no_grad():
+            raw_embeddings = self.item_embeddings.weight  # shape: [num_items, dim_embedding]
+            norm_embeddings = F.normalize(raw_embeddings, p=2, dim=1)  # unit vectors        
         return norm_embeddings
     
 
@@ -181,8 +183,9 @@ class HierarchicalItem2Vec(nn.Module):
 
 class Trainer:
     def __init__(self, model: HierarchicalItem2Vec, params: Params, optimizer,
-                 train_iter, valid_iter, map: ItemMap, method: BatchToolItem):
+                 train_iter, valid_iter, map: ItemMap, method: BatchToolItem, debug=False):
         self.model = model
+        model.debug = debug
         self.params = params
         self.optimizer = optimizer
         self.map = map
@@ -195,7 +198,6 @@ class Trainer:
 
         # sending all to device
         self.model.to(self.params.device)
-        #self.params.criterion.to(self.params.device)
         self.test_tokens = None
 
 
@@ -227,11 +229,11 @@ class Trainer:
             f"""    Training Time (mins): {self.epoch_train_mins.get(epoch)}"""
             """\n"""
             )
-            self.do_test()
-
+           
             if self.params.checkpoint_frequency:
                 self._save_checkpoint(epoch)
-    
+
+        self.do_test()
     
     def _train_epoch(self,_epoch):
         self.model.train()
@@ -247,12 +249,19 @@ class Trainer:
             output_indices = self.map.get_item_index(torch.tensor(outputs_).tolist())
             outputs = torch.tensor(output_indices)               
             inputs, outputs = inputs.to(self.params.device), outputs.to(self.params.device)     
-
+        
             self.optimizer.zero_grad()
             loss = self.model(inputs, outputs)
+
+            if self.model.debug >1 :
+                before = self.model.item_embeddings(inputs).clone()
             loss.backward()
             self.optimizer.step()
-
+            if self.model.debug >1 :
+                after = self.model.item_embeddings(inputs)
+                print("Change:", (after - before).abs().mean())
+                print(self.model.item_embeddings.weight.grad[inputs])
+            
             running_loss.append(loss.item())
             progress.set_postfix(loss=loss.item())
 
@@ -288,13 +297,15 @@ class Trainer:
 
         sampling_window=100
         test_size = 10
+
         if self.test_tokens != None:
-            ttokens= self.test_tokens
+            ttokens= []
             for w in self.test_tokens:
-                idw = self.map.get_index(w)
-                if idw == self.map.discard_id:
+                idw = self.map.get_item_index(w)
+                ttokens.append(idw)
+                if idw == self.map.discarded:
                     print(f"Item {w} not in Inventory List")
-            return
+                    return
         else:
             ttokens= np.array(random.sample(range(sampling_window), test_size//2)) # high frequency tokens
             ttokens= np.append(ttokens,random.sample(range(1000,1000+sampling_window), test_size//2)) #low frequency tokens
