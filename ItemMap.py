@@ -18,7 +18,7 @@ class ItemMap:
         cat_set.remove(10000)
         self.by_category ={val: i for i, val in enumerate(cat_set)}    
         self.dim_categories = len(self.by_category)
-    
+        print('total number of items ',self.dim_items, ' total number of categories ', self.dim_categories)
 
     def get_dict_items(self):   
         dict_items = {}    
