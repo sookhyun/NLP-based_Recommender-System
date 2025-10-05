@@ -2,6 +2,7 @@ from tqdm import tqdm
 from time import monotonic 
 import random
 import os
+import json
 
 import numpy as np
 import torch
@@ -146,7 +147,7 @@ class HierarchicalItem2Vec(nn.Module):
         return norm_embeddings
     
 
-    def find_closest_k_items(self, test_ids, topk):
+    def find_closest_k_items(self, test_ids, topk, do_print=True):
         """
         Hierarchical softmax doesn't store per-item target embeddings, so the item similarity 
         space lives in the input embedding matrix.
@@ -167,18 +168,20 @@ class HierarchicalItem2Vec(nn.Module):
             
         # Get top-k item indices
         topk_dists, topk_ids = similarities.topk(topk)    
+
+        if do_print==True:
+            print("\n-----------")  
+            for i, id in enumerate(test_ids):
+                print(str(self.map.get_item(id.item())) + " || ",end='')
+                dists = [d.item() for d in topk_dists[i]][0:]
+                topk_items = [self.map.get_item(k.item()) for k in topk_ids[i]][0:]
+                for j, (w, sim) in enumerate(zip(topk_items,dists)):
+                    print(f"{w} ({sim:.3f})", end=' ')
+                print('\n')
+            print("-----------")        
+
         
-        print("\n-----------")  
-        for i, id in enumerate(test_ids):
-            print(str(self.map.get_item(id.item())) + " || ",end='')
-            dists = [d.item() for d in topk_dists[i]][1:]
-            topk_items = [self.map.get_item(k.item()) for k in topk_ids[i]][1:]
-            for j, (w, sim) in enumerate(zip(topk_items,dists)):
-                print(f"{w} ({sim:.3f})", end=' ')
-            print('\n')
-        print("-----------")        
-        
-        return 
+        return similarities, embeddings
 
 
 class Trainer:
@@ -199,6 +202,8 @@ class Trainer:
         # sending all to device
         self.model.to(self.params.device)
         self.test_tokens = None
+        self.similarity_path = 'data.pt'
+        self.loss_path = 'loss.json'
 
 
     def train(self):
@@ -229,11 +234,12 @@ class Trainer:
             f"""    Training Time (mins): {self.epoch_train_mins.get(epoch)}"""
             """\n"""
             )
-           
+
             if self.params.checkpoint_frequency:
                 self._save_checkpoint(epoch)
 
-        self.do_test()
+        self.save_loss()
+        self.do_test(topk= 5, save_results=True)
     
     def _train_epoch(self,_epoch):
         self.model.train()
@@ -293,7 +299,7 @@ class Trainer:
             self.loss['valid'].append(epoch_loss)
 
 
-    def do_test(self, topk: int = 5):
+    def do_test(self, topk: int = 5, save_results=False, print_test=True):
 
         sampling_window=100
         test_size = 10
@@ -312,8 +318,15 @@ class Trainer:
 
         ttokens = torch.tensor(ttokens, dtype=torch.long).to(self.params.device)
 
-        self.model.find_closest_k_items(ttokens, topk)
-    
+        similarity_matrix, embeddings = self.model.find_closest_k_items(ttokens, topk, print_test)
+
+        if save_results ==True:
+            print('Save similarity matrix to ',self.similarity_path)
+            torch.save({
+            'embeddings': embeddings,
+            'similarity_matrix': similarity_matrix
+            }, self.similarity_path)
+            
 
     def _save_checkpoint(self, epoch):
         """Save model checkpoint to `self.model_dir` directory"""
@@ -329,9 +342,8 @@ class Trainer:
         torch.save(self.model, model_path)
 
     def save_loss(self):
-        """Save train/val loss as json file to `self.model_dir` directory"""
-        loss_path = os.path.join(self.params.model_dir, "loss.json")
-        with open(loss_path, "w") as fp:
+        """Save train/val loss as json file to `self.model_dir` directory"""   
+        with open(self.loss_path, "w") as fp:
             json.dump(self.loss, fp)
     
 
