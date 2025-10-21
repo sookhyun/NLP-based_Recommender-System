@@ -7,11 +7,17 @@ The goal of this project is to build a recommender system using the NLP techniqu
 RetailRocket Recommender System Dataset from Kaggle.
 
 ## Jupyter notebooks:
-[nb]Objectives_and_Data_wrangling.ipynb
-[nb]EDA_and_Tree_building.ipynb
-[nb]Feature_engineering_Train_data_development.ipynb
+[nb]Objectives_and_Data_wrangling.ipynb <br>
+[nb]EDA_and_Tree_building.ipynb <br>
+[nb]Feature_engineering_Train_data_development.ipynb <br>
 [nb]Modeling.ipynb
 
 ## Code:
+CategoryTree.py <br>
+HuffmanTree.py <br>
+HierarchicalItem2Vec.py
 
+ItemMap.py <br>
+parameters.py <br>
+batch_tool.py
 
