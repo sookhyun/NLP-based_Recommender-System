@@ -13,11 +13,16 @@ RetailRocket Recommender System Dataset from Kaggle.
 [nb]Modeling.ipynb
 
 ## Code:
-CategoryTree.py <br>
-HuffmanTree.py <br>
-HierarchicalItem2Vec.py
+-- Core models and data structures <br>
+   ├── CategoryTree.py <br>
+   ├── HuffmanTree.py <br>
+   ├── HierarchicalItem2Vec.py <br>
+   └── ItemMap.py 
 
-ItemMap.py <br>
-parameters.py <br>
-batch_tool.py
+-- Configuration, parameters <br>
+   └── parameters.py <br>
+
+-- Helper utilities <br>
+   ├── batch_tool.py <br>
+   └── sb_utils.py <br>
 
